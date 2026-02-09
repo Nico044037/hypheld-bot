@@ -12,10 +12,10 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=["!", "?"], intents=intents)
 
-# ===== CONFIG =====
+# ================= CONFIG =================
 welcome_channel_id: int | None = None
 
-# ===== RULES EMBED =====
+# ================= EMBEDS =================
 def rules_embed():
     embed = discord.Embed(
         title="📜 Welcome to the Server!",
@@ -38,33 +38,51 @@ def rules_embed():
         inline=False
     )
 
+    embed.add_field(
+        name="🎮 Minecraft Rules",
+        value=(
+            "❌ No hacking or cheats\n"
+            "🐞 No exploiting bugs\n"
+            "💬 No toxic behavior\n"
+            "👤 No alt accounts without approval\n"
+            "💸 No scamming or RMT\n"
+            "📕 Follow Minecraft EULA"
+        ),
+        inline=False
+    )
+
     embed.set_footer(text="⚠️ Breaking rules may result in punishment")
     return embed
 
-# ===== READY =====
+# ================= READY =================
 @bot.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
     print(f"✅ Logged in as {bot.user}")
 
-# ===== MEMBER JOIN =====
+# ================= MEMBER JOIN =================
 @bot.event
 async def on_member_join(member: discord.Member):
     if member.guild.id != GUILD_ID:
         return
 
+    # DM rules
     try:
         await member.send(embed=rules_embed())
     except discord.Forbidden:
         pass
 
+    # Welcome message
     if welcome_channel_id:
         channel = bot.get_channel(welcome_channel_id)
         if channel:
-            await channel.send(f"👋 Welcome {member.mention}!")
+            await channel.send(
+                f"👋 Welcome {member.mention}!\n"
+                f"📜 Please check your DMs for the rules ❤️"
+            )
 
-# ===== SETUP =====
+# ================= SETUP =================
 @bot.tree.command(name="setup", description="Set welcome channel")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def slash_setup(interaction: discord.Interaction, channel: discord.TextChannel):
@@ -82,7 +100,7 @@ async def setup(ctx, channel: discord.TextChannel):
     welcome_channel_id = channel.id
     await ctx.send(f"✅ Welcome channel set to {channel.mention}")
 
-# ===== SEND RULES =====
+# ================= SEND RULES =================
 @bot.tree.command(name="send", description="Send rules")
 async def slash_send(interaction: discord.Interaction):
     await interaction.response.send_message(embed=rules_embed())
@@ -91,21 +109,49 @@ async def slash_send(interaction: discord.Interaction):
 async def send(ctx):
     await ctx.send(embed=rules_embed())
 
-# ==================================================
-# 🔨 MODERATION COMMANDS (DYNO-STYLE)
-# ==================================================
+# ================= HELP =================
+@bot.command(name="help")
+async def help_command(ctx):
+    embed = discord.Embed(
+        title="📖 Help Menu",
+        description="Dyno-style commands",
+        color=discord.Color.blurple()
+    )
 
-# ===== ?KICK =====
+    embed.add_field(
+        name="⚙️ Setup",
+        value="`/setup #channel`\n`!setup #channel`\n`?setup #channel`",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📜 Rules",
+        value="`/send`\n`!send`\n`?send`",
+        inline=False
+    )
+
+    embed.add_field(
+        name="🔨 Moderation",
+        value=(
+            "`?kick @user [reason]`\n"
+            "`?role add @user @role`\n"
+            "`?role remove @user @role`"
+        ),
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
+# ================= MODERATION =================
 @bot.command()
 @commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided"):
+async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
     try:
         await member.kick(reason=reason)
-        await ctx.send(f"👢 **Kicked** {member.mention}\n📄 Reason: {reason}")
+        await ctx.send(f"👢 Kicked {member.mention}\n📄 Reason: {reason}")
     except discord.Forbidden:
-        await ctx.send("❌ I don’t have permission to kick this user.")
+        await ctx.send("❌ I can't kick this user.")
 
-# ===== ?ROLE ADD / REMOVE =====
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def role(ctx, action: str, member: discord.Member, role: discord.Role):
@@ -116,9 +162,9 @@ async def role(ctx, action: str, member: discord.Member, role: discord.Role):
         await member.remove_roles(role)
         await ctx.send(f"🏷️ Removed {role.mention} from {member.mention}")
     else:
-        await ctx.send("❌ Usage: `?role add @user @role` or `?role remove @user @role`")
+        await ctx.send("❌ Use: `?role add @user @role` or `?role remove @user @role`")
 
-# ===== START =====
+# ================= START =================
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set")
 
