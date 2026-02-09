@@ -1,6 +1,7 @@
 import os
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1452967364470505565
@@ -11,7 +12,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== CONFIG (set by !setup) =====
+# ===== CONFIG (set by /setup) =====
 welcome_channel_id: int | None = None
 
 # ===== RULES EMBED =====
@@ -59,8 +60,9 @@ async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
     print(f"✅ Logged in as {bot.user}")
+    print("✅ Slash commands synced")
 
-# ===== MEMBER JOIN (DM + WELCOME) =====
+# ===== MEMBER JOIN =====
 @bot.event
 async def on_member_join(member: discord.Member):
     if member.guild.id != GUILD_ID:
@@ -81,36 +83,29 @@ async def on_member_join(member: discord.Member):
                 f"📜 Please check your DMs for the rules ❤️"
             )
 
-# ===== !SETUP COMMAND =====
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def setup(ctx, channel: discord.TextChannel):
+# ===== /SETUP SLASH COMMAND =====
+@bot.tree.command(name="setup", description="Configure welcome channel and DM rules")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def setup(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel
+):
     global welcome_channel_id
-
-    if ctx.guild.id != GUILD_ID:
-        return
-
     welcome_channel_id = channel.id
 
-    await ctx.send(
+    await interaction.response.send_message(
         f"✅ **Setup complete!**\n"
         f"📌 Welcome channel set to {channel.mention}\n"
-        f"📨 New members will now receive rules in DMs."
+        f"📨 New members will now receive rules in DMs.",
+        ephemeral=True
     )
 
-@setup.error
-async def setup_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ You need **Manage Server** permission to use this.")
-    elif isinstance(error, commands.BadArgument):
-        await ctx.send("❌ Please mention a channel. Example: `!setup #welcome`")
-
-# ===== SLASH COMMAND =====
+# ===== /SEND SLASH COMMAND =====
 @bot.tree.command(name="send", description="Send the server rules")
 async def slash_send(interaction: discord.Interaction):
     await interaction.response.send_message(embed=rules_embed())
 
-# ===== PREFIX COMMAND =====
+# ===== !SEND PREFIX COMMAND =====
 @bot.command()
 async def send(ctx):
     await ctx.send(embed=rules_embed())
