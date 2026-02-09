@@ -7,29 +7,24 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1452967364470505565
 
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ===== READY EVENT =====
 @bot.event
 async def on_ready():
     guild = discord.Object(id=GUILD_ID)
 
-    # Copy global commands to guild and sync (instant)
+    # Instant guild sync
     bot.tree.copy_global_to(guild=guild)
     await bot.tree.sync(guild=guild)
 
     print(f"✅ Logged in as {bot.user}")
     print(f"✅ Slash commands synced to guild {GUILD_ID}")
 
-# ===== SLASH COMMAND =====
-@bot.tree.command(name="send", description="Send the server rules")
-async def send(interaction: discord.Interaction):
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "❌ This command can only be used in a server.",
-            ephemeral=True
-        )
-        return
-
+# ===== EMBED BUILDER =====
+def rules_embed():
     embed = discord.Embed(
         title="📜 WELCOME TO THE RULES",
         description="Please read carefully to keep the server fun and fair ❤️",
@@ -65,8 +60,27 @@ async def send(interaction: discord.Interaction):
     )
 
     embed.set_footer(text="⚠️ Breaking rules may result in mutes, bans, or wipes")
+    return embed
 
-    await interaction.response.send_message(embed=embed)
+# ===== SLASH COMMAND =====
+@bot.tree.command(name="send", description="Send the server rules")
+async def slash_send(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message(embed=rules_embed())
+
+# ===== PREFIX COMMAND =====
+@bot.command()
+async def send(ctx):
+    if ctx.guild is None:
+        return
+
+    await ctx.send(embed=rules_embed())
 
 # ===== START BOT =====
 if not TOKEN:
