@@ -3,22 +3,26 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-TOKEN = os.getenv("MTQ3MDQ2NDg2MzIzODM1NzA5Mw.G4p-fF.QrRWHDocHp9m0by8DitI3bXluocEnmyv0HMu-4")
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = 1452967364470505565
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    # Sync slash commands globally
-    await bot.tree.sync()
+    guild = discord.Object(id=GUILD_ID)
+
+    # Copy global commands to guild and sync (instant)
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
+
     print(f"✅ Logged in as {bot.user}")
-    print("✅ Slash commands synced")
+    print(f"✅ Slash commands synced to guild {GUILD_ID}")
 
 # ===== SLASH COMMAND =====
 @bot.tree.command(name="send", description="Send the server rules")
 async def send(interaction: discord.Interaction):
-    # Prevent DMs
     if interaction.guild is None:
         await interaction.response.send_message(
             "❌ This command can only be used in a server.",
