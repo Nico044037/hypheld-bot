@@ -12,7 +12,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== CONFIG (set by /setup) =====
+# ===== CONFIG (set by setup commands) =====
 welcome_channel_id: int | None = None
 
 # ===== RULES EMBED =====
@@ -86,7 +86,7 @@ async def on_member_join(member: discord.Member):
 # ===== /SETUP SLASH COMMAND =====
 @bot.tree.command(name="setup", description="Configure welcome channel and DM rules")
 @app_commands.checks.has_permissions(manage_guild=True)
-async def setup(
+async def slash_setup(
     interaction: discord.Interaction,
     channel: discord.TextChannel
 ):
@@ -99,6 +99,26 @@ async def setup(
         f"📨 New members will now receive rules in DMs.",
         ephemeral=True
     )
+
+# ===== !SETUP PREFIX COMMAND =====
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def setup(ctx, channel: discord.TextChannel):
+    global welcome_channel_id
+    welcome_channel_id = channel.id
+
+    await ctx.send(
+        f"✅ **Setup complete!**\n"
+        f"📌 Welcome channel set to {channel.mention}\n"
+        f"📨 New members will now receive rules in DMs."
+    )
+
+@setup.error
+async def setup_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You need **Manage Server** permission to use this.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send("❌ Usage: `!setup #welcome`")
 
 # ===== /SEND SLASH COMMAND =====
 @bot.tree.command(name="send", description="Send the server rules")
