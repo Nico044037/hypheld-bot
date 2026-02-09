@@ -2,11 +2,8 @@ import os
 import discord
 from discord.ext import commands
 
-# ===== CONFIG =====
-GUILD_ID = 1452967364470505565
 TOKEN = os.getenv("MTQ3MDQ2NDg2MzIzODM1NzA5Mw.G4p-fF.QrRWHDocHp9m0by8DitI3bXluocEnmyv0HMu-4")
 
-# ===== INTENTS =====
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -14,17 +11,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"✅ Logged in as {bot.user}")
 
 @bot.command()
 async def send(ctx):
-    # Only allow in the correct server
-    if ctx.guild is None or ctx.guild.id != GUILD_ID:
+    # Ignore DMs
+    if ctx.guild is None:
         return
 
     embed = discord.Embed(
         title="📜 WELCOME TO THE RULES",
-        description="Please read carefully to keep **Hypheld** fun and fair ❤️",
+        description="Please read carefully to keep the server fun and fair ❤️",
         color=discord.Color.red()
     )
 
@@ -60,7 +57,6 @@ async def send(ctx):
 
     await ctx.send(embed=embed)
 
-# ===== START BOT =====
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set")
 
