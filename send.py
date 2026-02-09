@@ -1,6 +1,5 @@
 import os
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -8,26 +7,18 @@ GUILD_ID = 1452967364470505565
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== READY EVENT =====
-@bot.event
-async def on_ready():
-    guild = discord.Object(id=GUILD_ID)
+# ===== CONFIG (set by !setup) =====
+welcome_channel_id: int | None = None
 
-    # Instant guild sync
-    bot.tree.copy_global_to(guild=guild)
-    await bot.tree.sync(guild=guild)
-
-    print(f"✅ Logged in as {bot.user}")
-    print(f"✅ Slash commands synced to guild {GUILD_ID}")
-
-# ===== EMBED BUILDER =====
+# ===== RULES EMBED =====
 def rules_embed():
     embed = discord.Embed(
-        title="📜 WELCOME TO THE RULES",
-        description="Please read carefully to keep the server fun and fair ❤️",
+        title="📜 Welcome to the Server!",
+        description="Please read the rules carefully ❤️",
         color=discord.Color.red()
     )
 
@@ -62,30 +53,70 @@ def rules_embed():
     embed.set_footer(text="⚠️ Breaking rules may result in mutes, bans, or wipes")
     return embed
 
+# ===== READY =====
+@bot.event
+async def on_ready():
+    guild = discord.Object(id=GUILD_ID)
+    await bot.tree.sync(guild=guild)
+    print(f"✅ Logged in as {bot.user}")
+
+# ===== MEMBER JOIN (DM + WELCOME) =====
+@bot.event
+async def on_member_join(member: discord.Member):
+    if member.guild.id != GUILD_ID:
+        return
+
+    # DM rules
+    try:
+        await member.send(embed=rules_embed())
+    except discord.Forbidden:
+        pass
+
+    # Welcome message
+    if welcome_channel_id:
+        channel = bot.get_channel(welcome_channel_id)
+        if channel:
+            await channel.send(
+                f"👋 Welcome {member.mention}!\n"
+                f"📜 Please check your DMs for the rules ❤️"
+            )
+
+# ===== !SETUP COMMAND =====
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def setup(ctx, channel: discord.TextChannel):
+    global welcome_channel_id
+
+    if ctx.guild.id != GUILD_ID:
+        return
+
+    welcome_channel_id = channel.id
+
+    await ctx.send(
+        f"✅ **Setup complete!**\n"
+        f"📌 Welcome channel set to {channel.mention}\n"
+        f"📨 New members will now receive rules in DMs."
+    )
+
+@setup.error
+async def setup_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You need **Manage Server** permission to use this.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send("❌ Please mention a channel. Example: `!setup #welcome`")
+
 # ===== SLASH COMMAND =====
 @bot.tree.command(name="send", description="Send the server rules")
 async def slash_send(interaction: discord.Interaction):
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "❌ This command can only be used in a server.",
-            ephemeral=True
-        )
-        return
-
     await interaction.response.send_message(embed=rules_embed())
 
 # ===== PREFIX COMMAND =====
 @bot.command()
 async def send(ctx):
-    if ctx.guild is None:
-        return
-
     await ctx.send(embed=rules_embed())
 
-# ===== START BOT =====
+# ===== START =====
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set")
 
 bot.run(TOKEN)
-
-
