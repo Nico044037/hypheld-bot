@@ -6,6 +6,9 @@ from discord import app_commands
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 1452967364470505565
 
+# ======================
+# INTENTS
+# ======================
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -84,17 +87,43 @@ async def send(ctx):
 # 🔨 MODERATION COMMANDS
 # ==================================================
 
+# ===== KICK =====
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
-    await member.kick(reason=reason)
-    await ctx.send(f"👢 **Kicked** {member.mention}\n📄 Reason: {reason}")
+    try:
+        await member.kick(reason=reason)
+        await ctx.send(f"👢 **Kicked** {member.mention}\n📄 Reason: {reason}")
+    except discord.Forbidden:
+        await ctx.send("❌ I don’t have permission to kick this user.")
+
+# ===== ROLE ADD / REMOVE =====
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def role(ctx, action: str, member: discord.Member, role: discord.Role):
+    if ctx.guild.id != GUILD_ID:
+        return
+
+    try:
+        if action.lower() == "add":
+            await member.add_roles(role)
+            await ctx.send(f"🏷️ Added {role.mention} to {member.mention}")
+
+        elif action.lower() == "remove":
+            await member.remove_roles(role)
+            await ctx.send(f"🏷️ Removed {role.mention} from {member.mention}")
+
+        else:
+            await ctx.send("❌ Usage: `?role add @user @role` or `?role remove @user @role`")
+
+    except discord.Forbidden:
+        await ctx.send("❌ I can’t manage that role (role hierarchy issue).")
 
 # ==================================================
 # 📋 LOGGING EVENTS
 # ==================================================
 
-# ROLE ADD / REMOVE LOG
+# ===== ROLE CHANGE LOG =====
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     if before.guild.id != GUILD_ID:
@@ -107,34 +136,34 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     before_roles = set(before.roles)
     after_roles = set(after.roles)
 
-    added = after_roles - before_roles
-    removed = before_roles - after_roles
+    added_roles = after_roles - before_roles
+    removed_roles = before_roles - after_roles
 
-    for role in added:
+    for role in added_roles:
         await log_channel.send(
             f"➕ **Role Added**\n"
             f"👤 User: {after.mention}\n"
             f"🏷️ Role: {role.mention}"
         )
 
-    for role in removed:
+    for role in removed_roles:
         await log_channel.send(
             f"➖ **Role Removed**\n"
             f"👤 User: {after.mention}\n"
             f"🏷️ Role: {role.mention}"
         )
 
-# MESSAGE DELETE LOG
+# ===== MESSAGE DELETE LOG =====
 @bot.event
 async def on_message_delete(message: discord.Message):
     if not message.guild or message.guild.id != GUILD_ID:
         return
 
-    log_channel = get_log_channel(message.guild)
-    if not log_channel:
+    if message.author.bot:
         return
 
-    if message.author.bot:
+    log_channel = get_log_channel(message.guild)
+    if not log_channel:
         return
 
     await log_channel.send(
