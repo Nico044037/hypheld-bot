@@ -1,22 +1,29 @@
 import os
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 TOKEN = os.getenv("MTQ3MDQ2NDg2MzIzODM1NzA5Mw.G4p-fF.QrRWHDocHp9m0by8DitI3bXluocEnmyv0HMu-4")
 
 intents = discord.Intents.default()
-intents.message_content = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
+    # Sync slash commands globally
+    await bot.tree.sync()
     print(f"✅ Logged in as {bot.user}")
+    print("✅ Slash commands synced")
 
-@bot.command()
-async def send(ctx):
-    # Ignore DMs
-    if ctx.guild is None:
+# ===== SLASH COMMAND =====
+@bot.tree.command(name="send", description="Send the server rules")
+async def send(interaction: discord.Interaction):
+    # Prevent DMs
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.",
+            ephemeral=True
+        )
         return
 
     embed = discord.Embed(
@@ -55,8 +62,9 @@ async def send(ctx):
 
     embed.set_footer(text="⚠️ Breaking rules may result in mutes, bans, or wipes")
 
-    await ctx.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
 
+# ===== START BOT =====
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN environment variable not set")
 
