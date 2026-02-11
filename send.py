@@ -2,6 +2,8 @@ import os
 import json
 import asyncio
 import discord
+import aiohttp
+from datetime import datetime
 from discord.ext import commands
 
 # ================= BASIC CONFIG =================
@@ -31,13 +33,7 @@ async def on_message(message):
 # ================= STORAGE =================
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w") as f:
-        json.dump(
-            {
-                "welcome_channel": None,
-                "autoroles": []
-            },
-            f
-        )
+        json.dump({"welcome_channel": None, "autoroles": []}, f)
 
 with open(DATA_FILE, "r") as f:
     data = json.load(f)
@@ -94,24 +90,17 @@ async def on_member_join(member: discord.Member):
 
     await asyncio.sleep(2)
 
-    # DM rules
     try:
         await member.send(embed=rules_embed())
     except:
         pass
 
-    # Autoroles
     if autoroles:
         roles_to_add = []
         for role_id in autoroles:
             role = member.guild.get_role(role_id)
-            if not role:
-                continue
-            if role.managed:
-                continue
-            if role >= member.guild.me.top_role:
-                continue
-            roles_to_add.append(role)
+            if role and not role.managed and role < member.guild.me.top_role:
+                roles_to_add.append(role)
 
         if roles_to_add:
             try:
@@ -119,7 +108,6 @@ async def on_member_join(member: discord.Member):
             except:
                 pass
 
-    # Welcome message
     if welcome_channel_id:
         channel = member.guild.get_channel(welcome_channel_id)
         if channel:
@@ -150,33 +138,21 @@ async def help(ctx):
         color=discord.Color.blurple()
     )
 
-    embed.add_field(
-        name="⚙️ Setup",
-        value="`!setup #channel`",
-        inline=False
-    )
-
+    embed.add_field(name="⚙️ Setup", value="`!setup #channel`", inline=False)
     embed.add_field(
         name="🏷️ Autorole",
         value="`?autorole add @role`\n`?autorole remove @role`",
         inline=False
     )
-
-    embed.add_field(
-        name="📜 Rules",
-        value="`!send`",
-        inline=False
-    )
-
+    embed.add_field(name="📜 Rules", value="`!send`", inline=False)
     embed.add_field(
         name="🔨 Moderation",
         value="`?kick @user [reason]`\n`?role add/remove @user @role`",
         inline=False
     )
-
     embed.add_field(
         name="🔥 Owner",
-        value="`$sudo`",
+        value="`$sudo info <mc_username>`",
         inline=False
     )
 
@@ -224,7 +200,47 @@ async def autorole(ctx, action: str, role: discord.Role):
 # ================= SUDO GROUP =================
 @bot.group(name="sudo")
 async def sudo(ctx):
-    await ctx.send("⚠️ No subcommands available.")
+    if ctx.invoked_subcommand is None:
+        await ctx.send("⚠️ Subcommands: info")
+
+# ================= SUDO INFO =================
+@sudo.command(name="info")
+@commands.has_permissions(administrator=True)
+async def sudo_info(ctx, mc_username: str):
+
+    await ctx.send("🔎 Fetching Minecraft data...")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{mc_username}"
+            ) as response:
+
+                if response.status != 200:
+                    return await ctx.send(
+                        f"❌ No Minecraft account found for `{mc_username}`."
+                    )
+
+                data = await response.json()
+                uuid_raw = data["id"]
+
+        uuid = (
+            f"{uuid_raw[:8]}-{uuid_raw[8:12]}-"
+            f"{uuid_raw[12:16]}-{uuid_raw[16:20]}-{uuid_raw[20:]}"
+        )
+
+        embed = discord.Embed(
+            title="🎮 Minecraft Account Info",
+            color=discord.Color.green()
+        )
+
+        embed.add_field(name="Username", value=mc_username, inline=False)
+        embed.add_field(name="UUID", value=uuid, inline=False)
+
+        await ctx.send(embed=embed)
+
+    except Exception as e:
+        await ctx.send(f"❌ Unexpected error: `{str(e)}`")
 
 # ================= START =================
 if not TOKEN:
