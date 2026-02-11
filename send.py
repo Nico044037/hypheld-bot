@@ -1,17 +1,11 @@
 import os
-import json
-import asyncio
 import discord
 import aiohttp
-from datetime import datetime
 from discord.ext import commands
+from datetime import datetime
 
-# ================= BASIC CONFIG =================
+# ================= CONFIG =================
 TOKEN = os.getenv("DISCORD_TOKEN")
-MAIN_GUILD_ID = int(os.getenv("GUILD_ID", "1452967364470505565"))
-DATA_FILE = "data.json"
-
-OWNER_ID = 1265323465079259166
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -23,185 +17,68 @@ bot = commands.Bot(
     help_command=None
 )
 
-# ================= FORCE COMMAND PROCESSING =================
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    await bot.process_commands(message)
-
-# ================= STORAGE =================
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump({"welcome_channel": None, "autoroles": []}, f)
-
-with open(DATA_FILE, "r") as f:
-    data = json.load(f)
-
-welcome_channel_id = data.get("welcome_channel")
-autoroles = set(data.get("autoroles", []))
-
-
-def save_data():
-    with open(DATA_FILE, "w") as f:
-        json.dump(
-            {
-                "welcome_channel": welcome_channel_id,
-                "autoroles": list(autoroles)
-            },
-            f,
-            indent=4
-        )
-
-# ================= EMBEDS =================
-def rules_embed():
-    embed = discord.Embed(
-        title="📜 Welcome to the Server!",
-        description="Please read the rules carefully ❤️",
-        color=discord.Color.red()
-    )
-
-    embed.add_field(
-        name="💬 Discord Rules",
-        value=(
-            "🤝 Be respectful\n"
-            "🚫 No spamming\n"
-            "🔞 No NSFW\n"
-            "📢 No advertising\n"
-            "⚠️ No illegal content\n"
-            "👮 Staff decisions are final"
-        ),
-        inline=False
-    )
-
-    embed.set_footer(text="⚠️ Breaking rules may result in punishment")
-    return embed
-
 # ================= READY =================
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
-# ================= MEMBER JOIN =================
-@bot.event
-async def on_member_join(member: discord.Member):
-    if member.guild.id != MAIN_GUILD_ID:
-        return
-
-    await asyncio.sleep(2)
-
-    try:
-        await member.send(embed=rules_embed())
-    except:
-        pass
-
-    if autoroles:
-        roles_to_add = []
-        for role_id in autoroles:
-            role = member.guild.get_role(role_id)
-            if role and not role.managed and role < member.guild.me.top_role:
-                roles_to_add.append(role)
-
-        if roles_to_add:
-            try:
-                await member.add_roles(*roles_to_add, reason="Autorole")
-            except:
-                pass
-
-    if welcome_channel_id:
-        channel = member.guild.get_channel(welcome_channel_id)
-        if channel:
-            await channel.send(
-                f"👋 Welcome {member.mention}!\n📜 Check your DMs ❤️"
-            )
-
-# ================= SETUP =================
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def setup(ctx, channel: discord.TextChannel):
-    global welcome_channel_id
-    welcome_channel_id = channel.id
-    save_data()
-    await ctx.send(f"✅ Welcome channel set to {channel.mention}")
-
-# ================= SEND RULES =================
-@bot.command()
-async def send(ctx):
-    await ctx.send(embed=rules_embed())
-
 # ================= HELP =================
-@bot.command()
-async def help(ctx):
-    embed = discord.Embed(
-        title="📖 Help Menu",
-        description="All available commands",
-        color=discord.Color.blurple()
+@bot.command(name="help")
+async def help_command(ctx):
+    embed = discord.Embed(title="📖 Help Menu", color=discord.Color.blurple())
+
+    embed.add_field(
+        name="Moderation",
+        value="`?kick @user`\n`?ban @user`\n`?role @user @role`",
+        inline=False
     )
 
-    embed.add_field(name="⚙️ Setup", value="`!setup #channel`", inline=False)
     embed.add_field(
-        name="🏷️ Autorole",
-        value="`?autorole add @role`\n`?autorole remove @role`",
-        inline=False
-    )
-    embed.add_field(name="📜 Rules", value="`!send`", inline=False)
-    embed.add_field(
-        name="🔨 Moderation",
-        value="`?kick @user [reason]`\n`?role add/remove @user @role`",
-        inline=False
-    )
-    embed.add_field(
-        name="🔥 Owner",
-        value="`$sudo info <mc_username>`",
+        name="Minecraft",
+        value="`$sudo info <username>`\n`$sudo head <username>`",
         inline=False
     )
 
     await ctx.send(embed=embed)
 
-# ================= MODERATION =================
+# ================= ROLE TOGGLE =================
 @bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
+@commands.has_permissions(manage_roles=True)
+async def role(ctx, member: discord.Member, role: discord.Role):
+
+    if role >= ctx.guild.me.top_role:
+        return await ctx.send("❌ I cannot manage that role.")
+
+    embed = discord.Embed(color=discord.Color.blurple())
+    embed.timestamp = datetime.utcnow()
+    embed.set_footer(text=f"Moderator: {ctx.author}",
+                     icon_url=ctx.author.display_avatar.url)
+
     try:
-        await member.kick(reason=reason)
-        await ctx.send(f"👢 Kicked {member.mention}")
-    except:
-        await ctx.send("❌ Cannot kick this user.")
+        if role in member.roles:
+            await member.remove_roles(role)
+            embed.title = "Role Removed"
+            embed.color = discord.Color.red()
+        else:
+            await member.add_roles(role)
+            embed.title = "Role Added"
+            embed.color = discord.Color.green()
 
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def role(ctx, action: str, member: discord.Member, role: discord.Role):
-    if role >= ctx.guild.me.top_role:
-        return await ctx.send("❌ Role above my highest role.")
+        embed.description = (
+            f"**Member:** {member.mention}\n"
+            f"**Role:** {role.mention}"
+        )
 
-    if action.lower() == "add":
-        await member.add_roles(role)
-        await ctx.send(f"✅ Added {role.mention}")
-    elif action.lower() == "remove":
-        await member.remove_roles(role)
-        await ctx.send(f"❌ Removed {role.mention}")
+        await ctx.send(embed=embed)
 
-# ================= AUTOROLE =================
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def autorole(ctx, action: str, role: discord.Role):
-    if role >= ctx.guild.me.top_role:
-        return await ctx.send("❌ Role too high.")
+    except discord.Forbidden:
+        await ctx.send("❌ I don’t have permission.")
 
-    if action.lower() == "add":
-        autoroles.add(role.id)
-        save_data()
-        await ctx.send("✅ Autorole added")
-    elif action.lower() == "remove":
-        autoroles.discard(role.id)
-        save_data()
-        await ctx.send("❌ Autorole removed")
-
-# ================= SUDO GROUP =================
+# ================= SUDO GROUP (FIXED PROPERLY) =================
 @bot.group(name="sudo")
 async def sudo(ctx):
     if ctx.invoked_subcommand is None:
-        await ctx.send("⚠️ Subcommands: info")
+        await ctx.send("⚠️ Subcommands: info, head")
 
 # ================= SUDO INFO =================
 @sudo.command(name="info")
@@ -209,6 +86,77 @@ async def sudo(ctx):
 async def sudo_info(ctx, mc_username: str):
 
     await ctx.send("🔎 Fetching Minecraft data...")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+
+            # GET UUID
+            async with session.get(
+                f"https://api.mojang.com/users/profiles/minecraft/{mc_username}"
+            ) as response:
+
+                if response.status != 200:
+                    return await ctx.send(
+                        f"❌ No Minecraft account found for `{mc_username}`."
+                    )
+
+                data = await response.json()
+                uuid_raw = data.get("id")
+
+                if not uuid_raw:
+                    return await ctx.send("❌ Invalid Mojang response.")
+
+                uuid = (
+                    f"{uuid_raw[:8]}-"
+                    f"{uuid_raw[8:12]}-"
+                    f"{uuid_raw[12:16]}-"
+                    f"{uuid_raw[16:20]}-"
+                    f"{uuid_raw[20:]}"
+                )
+
+        head_render = f"https://mc-heads.net/head/{uuid}"
+        body_render = f"https://mc-heads.net/body/{uuid}"
+        namemc_link = f"https://namemc.com/profile/{uuid}"
+
+        embed = discord.Embed(
+            title="🎮 Minecraft Account Info",
+            color=discord.Color.green()
+        )
+
+        embed.add_field(name="Username", value=mc_username, inline=False)
+        embed.add_field(name="UUID", value=uuid, inline=False)
+
+        embed.set_thumbnail(url=head_render)
+        embed.set_image(url=body_render)
+
+        class InfoView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=120)
+
+            @discord.ui.button(
+                label="Copy command to get head",
+                style=discord.ButtonStyle.primary
+            )
+            async def copy_cmd(self, interaction: discord.Interaction, button: discord.ui.Button):
+                await interaction.response.send_message(
+                    f"Copy this:\n```\n$sudo head {mc_username}\n```",
+                    ephemeral=True
+                )
+
+        view = InfoView()
+        view.add_item(discord.ui.Button(label="Open NameMC", url=namemc_link))
+
+        await ctx.send(embed=embed, view=view)
+
+    except Exception as e:
+        await ctx.send(f"❌ Error: `{str(e)}`")
+
+# ================= SUDO HEAD =================
+@sudo.command(name="head")
+@commands.has_permissions(administrator=True)
+async def sudo_head(ctx, mc_username: str):
+
+    await ctx.send("🧠 Fetching head render...")
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -222,25 +170,39 @@ async def sudo_info(ctx, mc_username: str):
                     )
 
                 data = await response.json()
-                uuid_raw = data["id"]
+                uuid_raw = data.get("id")
 
-        uuid = (
-            f"{uuid_raw[:8]}-{uuid_raw[8:12]}-"
-            f"{uuid_raw[12:16]}-{uuid_raw[16:20]}-{uuid_raw[20:]}"
-        )
+                uuid = (
+                    f"{uuid_raw[:8]}-"
+                    f"{uuid_raw[8:12]}-"
+                    f"{uuid_raw[12:16]}-"
+                    f"{uuid_raw[16:20]}-"
+                    f"{uuid_raw[20:]}"
+                )
+
+        head_render = f"https://mc-heads.net/head/{uuid}"
 
         embed = discord.Embed(
-            title="🎮 Minecraft Account Info",
-            color=discord.Color.green()
+            title=f"🧠 {mc_username}'s Head",
+            color=discord.Color.blue()
         )
 
-        embed.add_field(name="Username", value=mc_username, inline=False)
-        embed.add_field(name="UUID", value=uuid, inline=False)
+        embed.set_image(url=head_render)
 
         await ctx.send(embed=embed)
 
     except Exception as e:
-        await ctx.send(f"❌ Unexpected error: `{str(e)}`")
+        await ctx.send(f"❌ Error: `{str(e)}`")
+
+# ================= ERROR HANDLER =================
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You don’t have permission.")
+    elif isinstance(error, commands.CommandNotFound):
+        return
+    else:
+        await ctx.send(f"❌ Error: {error}")
 
 # ================= START =================
 if not TOKEN:
