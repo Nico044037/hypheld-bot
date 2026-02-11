@@ -10,7 +10,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 MAIN_GUILD_ID = int(os.getenv("GUILD_ID", "1452967364470505565"))
 DATA_FILE = "data.json"
 
-OWNER_ID = 123456789012345678  # <-- PUT YOUR DISCORD ID HERE
+OWNER_ID = 1265323465079259166  # <-- PUT YOUR DISCORD ID HERE
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -260,3 +260,4 @@ if not TOKEN:
     raise RuntimeError("DISCORD_TOKEN not set")
 
 bot.run(TOKEN)
+
